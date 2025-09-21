@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wallet Manager</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: linear-gradient(120deg, #f8fafc 0%, #e0e7ef 100%);
+      font-family: 'Inter', Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+      padding: 2.5rem 2rem 2rem 2rem;
+      max-width: 350px;
+      width: 100%;
+      text-align: center;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1.2rem;
+      color: #22223b;
+    }
+    button {
+      background: linear-gradient(90deg, #4f8cff 0%, #38b6ff 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.9rem 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 1.5rem;
+      box-shadow: 0 2px 8px rgba(79,140,255,0.08);
+    }
+    button:hover {
+      background: linear-gradient(90deg, #38b6ff 0%, #4f8cff 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Wallet Manager</h1>
+    <div style="margin-top:2rem;">
+      <input id="password" type="password" placeholder="Password to encrypt wallet" style="width:100%;padding:0.7rem;border-radius:6px;border:1px solid #d1d5db;font-size:1rem;" />
+    </div>
+    <button id="createWalletBtn" style="margin-top:1.2rem;">Create Wallet</button>
+    <div style="margin-top:2.5rem;">
+      <input id="importFile" type="file" accept="application/json" style="display:none;" />
+      <button id="importWalletBtn" style="background:#fff;color:#4f8cff;border:1.5px solid #4f8cff;">Import Wallet</button>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
+  <script>
+    const { ethers } = window;
+    let sessionWallet = null; // Will hold the wallet for the session
+    async function encryptMnemonic(mnemonic, password) {
+      const enc = new TextEncoder();
+      const salt = window.crypto.getRandomValues(new Uint8Array(16));
+      const keyMaterial = await window.crypto.subtle.importKey(
+        'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']
+      );
+      const key = await window.crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt']
+      );
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const ciphertext = await window.crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        enc.encode(mnemonic)
+      );
+      // Format: salt + iv + ciphertext (all base64)
+      return {
+        salt: btoa(String.fromCharCode(...salt)),
+        iv: btoa(String.fromCharCode(...iv)),
+        ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext)))
+      };
+    }
+    function downloadEncryptedWallet(data) {
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'encrypted_wallet.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    async function decryptMnemonic(data, password) {
+      const dec = new TextDecoder();
+      const enc = new TextEncoder();
+      const salt = Uint8Array.from(atob(data.salt), c => c.charCodeAt(0));
+      const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
+      const ciphertext = Uint8Array.from(atob(data.ciphertext), c => c.charCodeAt(0));
+      const keyMaterial = await window.crypto.subtle.importKey(
+        'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']
+      );
+      const key = await window.crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt']
+      );
+      try {
+        const decrypted = await window.crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv },
+          key,
+          ciphertext
+        );
+        return dec.decode(decrypted);
+      } catch (e) {
+        return null;
+      }
+    }
+    document.getElementById('createWalletBtn').addEventListener('click', async function() {
+      const password = document.getElementById('password').value;
+      if (!password || password.length < 6) {
+        alert('Please enter a password (min 6 characters) to encrypt your wallet.');
+        return;
+      }
+      const wallet = ethers.Wallet.createRandom();
+      const mnemonic = wallet.mnemonic?.phrase;
+      const address = wallet.address;
+      sessionWallet = wallet; // Store in RAM for session
+      const encrypted = await encryptMnemonic(mnemonic, password);
+      encrypted.address = address;
+      alert(`Your wallet has been created!\n\nAddress:\n${address}\n\nYou will now download your encrypted wallet file. Keep it safe!`);
+      downloadEncryptedWallet(encrypted);
+    });
+    document.getElementById('importWalletBtn').addEventListener('click', function() {
+      document.getElementById('importFile').click();
+    });
+    document.getElementById('importFile').addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async function(evt) {
+        try {
+          const data = JSON.parse(evt.target.result);
+          const password = prompt('Enter your password to decrypt the wallet:');
+          if (!password) return;
+          const mnemonic = await decryptMnemonic(data, password);
+          if (!mnemonic) {
+            alert('Decryption failed. Wrong password or corrupted file.');
+            return;
+          }
+          const wallet = ethers.Wallet.fromPhrase(mnemonic);
+          sessionWallet = wallet; // Store in RAM for session
+          alert(`Wallet successfully imported!\n\nAddress:\n${wallet.address}`);
+        } catch (err) {
+          alert('Invalid file or error during import.');
+        }
+      };
+      reader.readAsText(file);
+    });
+    // Example: you can now use sessionWallet for all session actions
+  </script>
+</body>
+</html>

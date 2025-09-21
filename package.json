@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "tsc && node dist/bot.js",
+    "miniapp": "serve -l 3000 ./miniapp",
+    "dev": "concurrently \"npm run miniapp\" \"npx ts-node bot.ts\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -23,6 +25,8 @@
   "devDependencies": {
     "@types/node": "^24.5.2",
     "@types/node-telegram-bot-api": "^0.64.11",
+    "concurrently": "^9.2.1",
+    "serve": "^14.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   },
