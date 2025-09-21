@@ -93,7 +93,7 @@ bot.setChatMenuButton({
 
 bot.onText(/\/start/, (msg) => {
   console.log('/start command received');
-  const summary = `Welcome to Bateleur!\n\nThis Telegram bot lets you manage your blockchain assets and transactions easily, powered by 0xGasless.\n\nMain features:\n• Smart account (gasless wallet) management\n• Address and balance queries\n• Gasless transfers and swaps\n• Natural language commands (no need for /command)\n\nJust send your instructions in plain English!\n\nInfrastructure powered by 0xGasless 🚀`;
+  const summary = `Welcome to Bateleur!\n\nThis Telegram bot lets you manage your blockchain assets and transactions easily, powered by 0xGasless.\n\nMain features:\n• Smart account (gasless wallet) management\n• Address and balance queries\n• Gasless transfers and swaps\n• Natural language commands\n\n💡 **Quick commands:**\n• Type "wallet" or "wallets" to manage your wallets\n• Send natural language instructions for transactions\n\nInfrastructure powered by 0xGasless 🚀`;
   
   bot.sendMessage(msg.chat.id, summary, {
     reply_markup: {
@@ -106,6 +106,58 @@ bot.onText(/\/start/, (msg) => {
   }).catch(err => {
     console.log('Error sending message:', err);
   });
+});
+
+// Handle natural language wallet management
+bot.on('message', (msg) => {
+  if (!msg.text) return;
+  
+  const text = msg.text.toLowerCase().trim();
+  const userId = msg.from?.id;
+  if (!userId) return;
+  
+  // Handle wallet/wallets commands naturally
+  if (text === 'wallet' || text === 'wallets' || text === 'mes wallets' || text === 'mon wallet' || 
+      text === 'portefeuille' || text === 'mes portefeuilles' || text === 'manage wallets' || 
+      text === 'wallet management' || text === 'gestion wallet') {
+    console.log('Natural wallet command received:', text);
+    
+    const session = getUserSession(userId);
+    
+    if (session.wallets.length === 0) {
+      bot.sendMessage(msg.chat.id, "You don't have any wallets yet. Create or import one first:", {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔐 Create/Import Wallet", callback_data: "open_wallet_manager" }
+          ]]
+        }
+      });
+    } else {
+      // Show wallet selection menu
+      const walletButtons = session.wallets.map((wallet, index) => [{
+        text: `${index === session.activeWalletIndex ? '✅ ' : ''}${wallet.name} (${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)})`,
+        callback_data: `select_wallet_${index}`
+      }]);
+      
+      walletButtons.push([
+        { text: "➕ Add New Wallet", callback_data: "open_wallet_manager" }
+      ]);
+      
+      const activeWallet = getActiveWallet(userId);
+      const activeText = activeWallet ? `Active: ${activeWallet.name}` : 'No active wallet';
+      
+      bot.sendMessage(msg.chat.id, `🔐 **Wallet Management**\n\n${activeText}\n\nSelect a wallet to make it active:`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: walletButtons
+        }
+      });
+    }
+    return;
+  }
+  
+  // Log other messages for potential MCP processing
+  console.log('Message received:', msg.text);
 });
 
 bot.onText(/\/wallets/, (msg) => {
