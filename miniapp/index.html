@@ -69,11 +69,38 @@
       font-size: 1rem;
       margin-bottom: 1rem;
       box-sizing: border-box;
+      transition: all 0.2s;
+    }
+    .input-field:disabled {
+      background-color: #f3f4f6;
+      color: #9ca3af;
+      border-color: #e5e7eb;
+      cursor: not-allowed;
     }
     .textarea-field {
       min-height: 80px;
       resize: vertical;
       font-family: 'Inter', Arial, sans-serif;
+    }
+    .checkbox-container {
+      margin-bottom: 1rem;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #374151;
+      user-select: none;
+    }
+    .checkbox {
+      margin-right: 0.5rem;
+      width: 16px;
+      height: 16px;
+      accent-color: #4f8cff;
+    }
+    .checkmark {
+      margin-left: 0.25rem;
     }
     .primary-btn {
       background: linear-gradient(90deg, #4f8cff 0%, #38b6ff 100%);
@@ -144,7 +171,16 @@
       <div class="section">
         <h3>Import from Seed Phrase</h3>
         <textarea id="seedPhrase" placeholder="Enter your 12 or 24 word seed phrase..." class="textarea-field"></textarea>
-        <input id="seedPassword" type="password" placeholder="Password to encrypt wallet" class="input-field" />
+        
+        <div class="checkbox-container">
+          <label class="checkbox-label">
+            <input type="checkbox" id="storeWalletCheckbox" class="checkbox">
+            <span class="checkmark"></span>
+            Encrypt and store the private key on my device
+          </label>
+        </div>
+        
+        <input id="seedPassword" type="password" placeholder="Password to encrypt wallet" class="input-field" disabled style="opacity: 0.5;" />
         <button id="importSeedBtn" class="primary-btn">Import from Seed</button>
       </div>
       
@@ -166,6 +202,20 @@
       window.Telegram.WebApp.ready();
       window.Telegram.WebApp.expand();
     }
+    
+    // Handle checkbox for seed phrase storage option
+    document.getElementById('storeWalletCheckbox').addEventListener('change', function() {
+      const passwordField = document.getElementById('seedPassword');
+      if (this.checked) {
+        passwordField.disabled = false;
+        passwordField.style.opacity = '1';
+        passwordField.focus();
+      } else {
+        passwordField.disabled = true;
+        passwordField.style.opacity = '0.5';
+        passwordField.value = '';
+      }
+    });
     
     function sendWalletToBot(walletData) {
       try {
@@ -192,7 +242,10 @@
       return words.length === 12 || words.length === 24;
     }
     
-    function showSuccessMessage(wallet) {
+    function showSuccessMessage(wallet, customMessage = null) {
+      const defaultMessage = 'Your wallet is now active in the bot session and ready to use!';
+      const message = customMessage || defaultMessage;
+      
       const container = document.querySelector('.container');
       container.innerHTML = `
         <h1>✅ Wallet Ready!</h1>
@@ -200,7 +253,7 @@
           <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #0369a1;">Address:</p>
           <p style="margin: 0; font-family: monospace; font-size: 0.9rem; word-break: break-all; color: #374151;">${wallet.address}</p>
         </div>
-        <p style="color: #6b7280; font-size: 0.9rem;">Your wallet is now active in the bot session and ready to use!</p>
+        <p style="color: #6b7280; font-size: 0.9rem;">${message}</p>
       `;
     }
     async function encryptMnemonic(mnemonic, password) {
@@ -298,6 +351,7 @@
     });
     document.getElementById('importSeedBtn').addEventListener('click', async function() {
       const seedPhrase = document.getElementById('seedPhrase').value.trim();
+      const shouldStore = document.getElementById('storeWalletCheckbox').checked;
       const password = document.getElementById('seedPassword').value;
       
       if (!seedPhrase) {
@@ -310,7 +364,7 @@
         return;
       }
       
-      if (!password || password.length < 6) {
+      if (shouldStore && (!password || password.length < 6)) {
         alert('Please enter a password (min 6 characters) to encrypt your wallet.');
         return;
       }
@@ -328,12 +382,17 @@
         };
         
         sendWalletToBot(walletData);
-        showSuccessMessage(walletData);
         
-        // Also create encrypted backup
-        const encrypted = await encryptMnemonic(seedPhrase, password);
-        encrypted.address = wallet.address;
-        downloadEncryptedWallet(encrypted);
+        if (shouldStore) {
+          // Create encrypted backup only if user wants to store it
+          const encrypted = await encryptMnemonic(seedPhrase, password);
+          encrypted.address = wallet.address;
+          downloadEncryptedWallet(encrypted);
+          
+          showSuccessMessage(walletData, 'Wallet imported and encrypted backup downloaded!');
+        } else {
+          showSuccessMessage(walletData, 'Wallet imported! Private key stored only in RAM for this session.');
+        }
       } catch (error) {
         console.error('Error importing from seed phrase:', error);
         alert('Invalid seed phrase. Please check and try again.');
