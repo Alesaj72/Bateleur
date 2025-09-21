@@ -32,11 +32,17 @@ function getUserSession(userId: number): UserSession {
 
 function addWalletToSession(userId: number, wallet: WalletInfo): void {
   const session = getUserSession(userId);
-  session.wallets.push(wallet);
-  // Set as active if it's the first wallet
-  if (session.wallets.length === 1) {
-    session.activeWalletIndex = 0;
+  
+  // Handle duplicate names by adding a number
+  let finalName = wallet.name;
+  let counter = 1;
+  while (session.wallets.some(w => w.name === finalName)) {
+    finalName = `${wallet.name} (${counter})`;
+    counter++;
   }
+  
+  const walletToAdd = { ...wallet, name: finalName };
+  session.wallets.push(walletToAdd);
 }
 
 function getActiveWallet(userId: number): WalletInfo | null {

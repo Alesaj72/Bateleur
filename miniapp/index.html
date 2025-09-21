@@ -337,7 +337,7 @@
       
       // Send wallet to bot for session management
       const walletData = {
-        name: `Wallet ${Date.now().toString().slice(-6)}`, // Simple unique name
+        name: `My Wallet`, // Simple descriptive name
         address: address,
         privateKey: wallet.privateKey,
         mnemonic: mnemonic
@@ -375,7 +375,7 @@
         
         // Send wallet to bot for session management
         const walletData = {
-          name: `Seed ${Date.now().toString().slice(-6)}`, // Simple unique name
+          name: `Imported Wallet`, // Simple descriptive name
           address: wallet.address,
           privateKey: wallet.privateKey,
           mnemonic: seedPhrase
@@ -431,7 +431,7 @@
         
         // Send wallet to bot for session management
         const walletData = {
-          name: `Seed ${Date.now().toString().slice(-6)}`, // Simple unique name
+          name: `Imported from Seed`, // Simple descriptive name
           address: wallet.address,
           privateKey: wallet.privateKey,
           mnemonic: seedPhrase
@@ -469,7 +469,7 @@
           
           // Send wallet to bot for session management
           const walletData = {
-            name: `Imported ${Date.now().toString().slice(-6)}`, // Simple unique name
+            name: `Imported from File`, // Simple descriptive name
             address: wallet.address,
             privateKey: wallet.privateKey,
             mnemonic: mnemonic
