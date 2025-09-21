@@ -1,0 +1,23 @@
+{
+  "name": "bateleur",
+  "version": "1.0.0",
+  "description": "Telegram buy bot. Integrating 0xGasless agentkit + gasless swaps",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsc && node dist/bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/node-telegram-bot-api": "^0.64.11",
+    "typescript": "^5.9.2"
+  },
+  "type": "module"
+}
