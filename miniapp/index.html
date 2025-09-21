@@ -50,17 +50,15 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Wallet Manager</h1>
-    <div style="margin-top:2rem;">
+    <div class="container">
+      <h1>Wallet Manager</h1>
       <input id="password" type="password" placeholder="Password to encrypt wallet" style="width:100%;padding:0.7rem;border-radius:6px;border:1px solid #d1d5db;font-size:1rem;" />
+      <button id="createWalletBtn" style="margin-top:1.2rem;">Create Wallet</button>
+      <div style="margin-top:2.5rem;">
+        <input id="importFile" type="file" accept="application/json" style="display:none;" />
+        <button id="importWalletBtn" style="background:#fff;color:#4f8cff;border:1.5px solid #4f8cff;">Import Wallet</button>
+      </div>
     </div>
-    <button id="createWalletBtn" style="margin-top:1.2rem;">Create Wallet</button>
-    <div style="margin-top:2.5rem;">
-      <input id="importFile" type="file" accept="application/json" style="display:none;" />
-      <button id="importWalletBtn" style="background:#fff;color:#4f8cff;border:1.5px solid #4f8cff;">Import Wallet</button>
-    </div>
-  </div>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
   <script>
     const { ethers } = window;
