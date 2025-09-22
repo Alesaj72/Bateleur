@@ -197,7 +197,7 @@
       flex: 1;
     }
     .mode-badge {
-      background: linear-gradient(90deg, #4f8cff 0%, #38b6ff 100%);
+      background: linear-gradient(90deg, #10b981 0%, #059669 100%);
       color: white;
       padding: 0.25rem 0.5rem;
       border-radius: 4px;
@@ -267,27 +267,27 @@
           <div class="transaction-mode-option" id="classicMode">
             <div class="mode-header">
               <input type="radio" name="transactionMode" value="classic" id="classicModeRadio" checked />
-              <label for="classicModeRadio">⚡ Classic Wallet</label>
+              <label for="classicModeRadio">⚡ Classic Transactions</label>
             </div>
             <div class="mode-description">
-              Direct blockchain transactions with gas fees
+              Direct blockchain transactions paid with native token (AVAX)
             </div>
           </div>
           
           <div class="transaction-mode-option" id="smartAccountMode">
             <div class="mode-header">
               <input type="radio" name="transactionMode" value="smartAccount" id="smartAccountModeRadio" />
-              <label for="smartAccountModeRadio">🚀 Smart Account</label>
-              <span class="mode-badge">Gasless</span>
+              <label for="smartAccountModeRadio">� Smart Swaps</label>
+              <span class="mode-badge">Gas-in-Token</span>
             </div>
             <div class="mode-description">
-              ERC4337 Account Abstraction with sponsored gas
+              Swap tokens with gas fees paid using the purchased token (no native token required)
             </div>
           </div>
         </div>
         
-        <button id="testTransactionBtn" class="primary-btn" style="margin-top: 1rem;">
-          Test Transaction
+        <button id="testSwapBtn" class="primary-btn" style="margin-top: 1rem;">
+          Test Swap Function
         </button>
       </div>
     </div>
@@ -423,48 +423,48 @@
       }
     }
     
-    // 🚀 Smart Account Integration (ERC4337)
+    // � Smart Swap Integration (Gas-in-Token)
     let ethersV5Loaded = false;
-    let smartAccountModule = null;
+    let smartSwapModule = null;
     
-    // Configuration for Smart Account (from environment)
-    const SMART_ACCOUNT_CONFIG = {
+    // Configuration for Smart Swaps (gas paid with purchased token)
+    const SMART_SWAP_CONFIG = {
       bundlerUrl: '', // Will be populated from server config
       paymasterUrl: '', // Will be populated from server config
       chainId: 43114 // Avalanche
     };
     
-    // Load Smart Account dependencies
-    async function initializeSmartAccount() {
+    // Load Smart Swap dependencies
+    async function initializeSmartSwap() {
       try {
         if (!ethersV5Loaded) {
           await loadEthersV5();
           ethersV5Loaded = true;
-          console.log('✅ Ethers v5 loaded for Smart Account');
+          console.log('✅ Ethers v5 loaded for Smart Swaps');
         }
         
-        // Load Smart Account SDK
-        if (!smartAccountModule) {
+        // Load Smart Swap SDK
+        if (!smartSwapModule) {
           // In a real implementation, you would load the module dynamically
-          console.log('🚀 Smart Account SDK would be loaded here');
+          console.log('� Smart Swap SDK would be loaded here');
           // const { createSmartAccountClient } = await import('@0xgasless/smart-account');
-          // smartAccountModule = { createSmartAccountClient };
+          // smartSwapModule = { createSmartAccountClient };
         }
         
         return true;
       } catch (error) {
-        console.error('❌ Failed to initialize Smart Account:', error);
+        console.error('❌ Failed to initialize Smart Swap:', error);
         return false;
       }
     }
     
-    // Smart Account transaction signing
-    async function signTransactionSmartAccount(transactionData, walletAddress) {
+    // Smart Swap execution (gas paid with purchased token)
+    async function executeSmartSwap(swapData, walletAddress) {
       try {
-        // Ensure Smart Account is initialized
-        const initialized = await initializeSmartAccount();
+        // Ensure Smart Swap is initialized
+        const initialized = await initializeSmartSwap();
         if (!initialized) {
-          throw new Error('Smart Account initialization failed');
+          throw new Error('Smart Swap initialization failed');
         }
         
         const localWallets = getLocalWallets();
@@ -474,34 +474,36 @@
           throw new Error('Wallet not found in local storage');
         }
         
-        // Create ethers v5 signer for Smart Account compatibility
+        // Create ethers v5 signer for Smart Swap compatibility
         const ethersSigner = new ethersV5.Wallet(wallet.privateKey);
         
-        // Mock Smart Account implementation (replace with real SDK when available)
-        console.log('🚀 Smart Account transaction would be executed here');
-        console.log('📝 Transaction data:', transactionData);
+        // Mock Smart Swap implementation (replace with real SDK when available)
+        console.log('� Smart Swap would be executed here');
+        console.log('📝 Swap data:', swapData);
         console.log('🔑 Signer address:', ethersSigner.address);
+        console.log('💰 Gas will be paid with purchased token, not native AVAX');
         
         // For now, return mock success
         return {
           success: true,
           transactionHash: '0x' + Math.random().toString(16).substr(2, 64),
-          smartAccount: true,
-          gasSponsored: true,
+          smartSwap: true,
+          gasInToken: true,
+          tokenUsedForGas: swapData.tokenToBuy || 'USDC',
           from: ethersSigner.address
         };
         
         /* Real implementation would be:
-        const smartAccount = await smartAccountModule.createSmartAccountClient({
+        const smartAccount = await smartSwapModule.createSmartAccountClient({
           signer: ethersSigner,
-          bundlerUrl: SMART_ACCOUNT_CONFIG.bundlerUrl,
-          paymasterUrl: SMART_ACCOUNT_CONFIG.paymasterUrl,
+          bundlerUrl: SMART_SWAP_CONFIG.bundlerUrl,
+          paymasterUrl: SMART_SWAP_CONFIG.paymasterUrl,
         });
         
         const { wait } = await smartAccount.sendTransaction({
-          to: transactionData.to,
-          value: transactionData.value,
-          data: transactionData.data
+          to: swapData.router,
+          value: swapData.value,
+          data: swapData.swapCalldata
         });
         
         const { receipt: { transactionHash }, success } = await wait();
@@ -509,30 +511,31 @@
         return {
           success,
           transactionHash,
-          smartAccount: true,
-          gasSponsored: true,
+          smartSwap: true,
+          gasInToken: true,
+          tokenUsedForGas: swapData.tokenToBuy,
           from: ethersSigner.address
         };
         */
         
       } catch (error) {
-        console.error('❌ Smart Account transaction failed:', error);
+        console.error('❌ Smart Swap execution failed:', error);
         return {
           success: false,
           error: error.message,
-          smartAccount: true
+          smartSwap: true
         };
       }
     }
     
-    // Unified transaction interface
-    async function executeTransaction(transactionData, walletAddress, useSmartAccount = false) {
-      if (useSmartAccount) {
-        console.log('🚀 Executing via Smart Account (gasless)');
-        return await signTransactionSmartAccount(transactionData, walletAddress);
+    // Unified swap interface
+    async function executeSwap(swapData, walletAddress, useSmartSwap = false) {
+      if (useSmartSwap) {
+        console.log('� Executing Smart Swap (gas paid with purchased token)');
+        return await executeSmartSwap(swapData, walletAddress);
       } else {
-        console.log('⚡ Executing via classic wallet');
-        return await signTransactionLocally(transactionData, walletAddress);
+        console.log('⚡ Executing classic swap (gas paid with AVAX)');
+        return await signTransactionLocally(swapData, walletAddress);
       }
     }
     
@@ -847,9 +850,9 @@
     });
     
     // Transaction Mode Event Listeners
-    document.getElementById('testTransactionBtn').addEventListener('click', async function() {
+    document.getElementById('testSwapBtn').addEventListener('click', async function() {
       const selectedMode = document.querySelector('input[name="transactionMode"]:checked').value;
-      const useSmartAccount = selectedMode === 'smartAccount';
+      const useSmartSwap = selectedMode === 'smartAccount';
       
       // Get current wallet
       const localWallets = getLocalWallets();
@@ -860,36 +863,41 @@
       
       const wallet = localWallets[0]; // Use first wallet for testing
       
-      // Test transaction data
-      const testTxData = {
-        to: '0x742d35Cc6635C0532925a3b8D93b3E91D3b8B5bE', // Test address
-        value: '0x0', // 0 ETH
-        gasLimit: '0x5208', // 21000
-        gasPrice: '0x9502f9000' // 40 Gwei
+      // Test swap data (AVAX -> USDC swap example)
+      const testSwapData = {
+        router: '0x60aE616a2155Ee3d9A68541Ba4544862310933d4', // TraderJoe router
+        tokenFrom: '0x0000000000000000000000000000000000000000', // AVAX (native)
+        tokenToBuy: 'USDC',
+        tokenToAddress: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', // USDC on Avalanche
+        value: '0x16345785d8a0000', // 0.1 AVAX
+        swapCalldata: '0x...' // Mock swap calldata
       };
       
       try {
         this.disabled = true;
-        this.textContent = useSmartAccount ? 'Testing Smart Account...' : 'Testing Classic Wallet...';
+        this.textContent = useSmartSwap ? 'Testing Smart Swap...' : 'Testing Classic Swap...';
         
-        console.log(`🧪 Testing ${useSmartAccount ? 'Smart Account' : 'Classic'} transaction...`);
+        console.log(`🧪 Testing ${useSmartSwap ? 'Smart Swap (gas-in-token)' : 'Classic Swap (gas-in-AVAX)'} ...`);
         
-        const result = await executeTransaction(testTxData, wallet.address, useSmartAccount);
+        const result = await executeSwap(testSwapData, wallet.address, useSmartSwap);
         
         if (result.success) {
-          const message = useSmartAccount 
-            ? `✅ Smart Account transaction successful!\n🚀 Gas sponsored: ${result.gasSponsored}\n📝 TX: ${result.transactionHash}`
-            : `✅ Classic transaction signed!\n📝 TX: ${result.transactionHash}`;
+          let message;
+          if (useSmartSwap) {
+            message = `✅ Smart Swap successful!\n� Gas paid with: ${result.tokenUsedForGas}\n🔄 No AVAX required for gas\n📝 TX: ${result.transactionHash}`;
+          } else {
+            message = `✅ Classic swap signed!\n⛽ Gas paid with: AVAX\n📝 TX: ${result.transactionHash}`;
+          }
           alert(message);
         } else {
-          alert(`❌ Transaction failed: ${result.error}`);
+          alert(`❌ Swap failed: ${result.error}`);
         }
       } catch (error) {
-        console.error('Test transaction error:', error);
+        console.error('Test swap error:', error);
         alert(`❌ Test failed: ${error.message}`);
       } finally {
         this.disabled = false;
-        this.textContent = 'Test Transaction';
+        this.textContent = 'Test Swap Function';
       }
     });
     
@@ -905,14 +913,14 @@
       }
     }
     
-    // Initialize Smart Account on page load
+    // Initialize Smart Swap on page load
     document.addEventListener('DOMContentLoaded', async function() {
       updateTransactionModeVisibility();
       
-      // Initialize Smart Account in background
+      // Initialize Smart Swap in background
       setTimeout(async () => {
-        console.log('🚀 Initializing Smart Account SDK...');
-        await initializeSmartAccount();
+        console.log('� Initializing Smart Swap SDK...');
+        await initializeSmartSwap();
       }, 1000);
     });
     
