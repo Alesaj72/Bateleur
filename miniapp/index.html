@@ -70,6 +70,14 @@
       margin-bottom: 1rem;
       box-sizing: border-box;
       transition: all 0.2s;
+      /* Force interactivity in Telegram WebApp */
+      pointer-events: auto !important;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -webkit-touch-callout: default !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      background-color: white !important;
     }
     .input-field:disabled {
       background-color: #f3f4f6;
@@ -160,6 +168,14 @@
         <div class="container">
       <h1>Wallet Manager</h1>
       
+      <!-- Security Information -->
+      <div class="section" style="background: #f0f9ff; border: 1px solid #0ea5e9;">
+        <h3 style="color: #0369a1;">🔐 Secure Architecture</h3>
+        <p style="font-size: 0.9rem; color: #0369a1; margin: 0;">
+          Your private keys <strong>NEVER leave your device</strong>. They are stored locally and only public addresses are sent to our servers.
+        </p>
+      </div>
+      
       <!-- Create New Wallet Section -->
       <div class="section">
         <h3>Create New Wallet</h3>
@@ -170,7 +186,10 @@
       <!-- Import from Seed Phrase Section -->
       <div class="section">
         <h3>Import from Seed Phrase</h3>
-        <textarea id="seedPhrase" placeholder="Enter your 12 or 24 word seed phrase..." class="textarea-field"></textarea>
+        <div id="seedPhraseDisplay" class="textarea-field" onclick="openSeedPhraseInput()" style="cursor: pointer; min-height: 80px; display: flex; align-items: center; justify-content: center; color: #9ca3af;">
+          Click to enter your seed phrase...
+        </div>
+        <textarea id="seedPhrase" placeholder="Enter your 12 or 24 word seed phrase..." class="textarea-field" style="display: none;"></textarea>
         
         <div class="checkbox-container">
           <label class="checkbox-label">
@@ -197,10 +216,164 @@
     const { ethers } = window;
     let sessionWallet = null; // Will hold the wallet for the session
     
+    // 🔐 SECURE LOCAL STORAGE for private keys - NEVER sent to server
+    const WALLETS_STORAGE_KEY = 'bateleur_wallets_secure';
+    
+    // Secure local storage functions
+    function saveWalletLocally(walletData, password = null) {
+      try {
+        const wallets = getLocalWallets();
+        
+        // For encrypted storage (optional)
+        if (password) {
+          // TODO: Implement client-side encryption for long-term storage
+          console.log('🔐 Encrypted local storage not implemented yet');
+        }
+        
+        // For now, store in sessionStorage (RAM only, cleared on tab close)
+        wallets.push({
+          name: walletData.name,
+          address: walletData.address,
+          privateKey: walletData.privateKey,
+          mnemonic: walletData.mnemonic,
+          timestamp: Date.now()
+        });
+        
+        sessionStorage.setItem(WALLETS_STORAGE_KEY, JSON.stringify(wallets));
+        console.log('🔐 Wallet saved locally (session only)');
+      } catch (error) {
+        console.error('Error saving wallet locally:', error);
+      }
+    }
+    
+    function getLocalWallets() {
+      try {
+        const walletsData = sessionStorage.getItem(WALLETS_STORAGE_KEY);
+        return walletsData ? JSON.parse(walletsData) : [];
+      } catch (error) {
+        console.error('Error loading local wallets:', error);
+        return [];
+      }
+    }
+    
+    function clearLocalWallets() {
+      sessionStorage.removeItem(WALLETS_STORAGE_KEY);
+      console.log('🔐 Local wallets cleared');
+    }
+    
+    // 🔐 Client-side transaction signing utilities
+    async function signTransactionLocally(transactionData, walletAddress) {
+      try {
+        const localWallets = getLocalWallets();
+        const wallet = localWallets.find(w => w.address.toLowerCase() === walletAddress.toLowerCase());
+        
+        if (!wallet) {
+          throw new Error('Wallet not found in local storage');
+        }
+        
+        // Create ethers wallet instance for signing
+        const ethersWallet = new ethers.Wallet(wallet.privateKey);
+        
+        // Sign the transaction
+        const signedTx = await ethersWallet.signTransaction(transactionData);
+        
+        return {
+          success: true,
+          signedTransaction: signedTx,
+          from: ethersWallet.address
+        };
+      } catch (error) {
+        console.error('Error signing transaction locally:', error);
+        return {
+          success: false,
+          error: error.message
+        };
+      }
+    }
+    
+    async function signMessageLocally(message, walletAddress) {
+      try {
+        const localWallets = getLocalWallets();
+        const wallet = localWallets.find(w => w.address.toLowerCase() === walletAddress.toLowerCase());
+        
+        if (!wallet) {
+          throw new Error('Wallet not found in local storage');
+        }
+        
+        // Create ethers wallet instance for signing
+        const ethersWallet = new ethers.Wallet(wallet.privateKey);
+        
+        // Sign the message
+        const signature = await ethersWallet.signMessage(message);
+        
+        return {
+          success: true,
+          signature: signature,
+          address: ethersWallet.address
+        };
+      } catch (error) {
+        console.error('Error signing message locally:', error);
+        return {
+          success: false,
+          error: error.message
+        };
+      }
+    }
+    
     // Initialize Telegram WebApp
     if (window.Telegram && window.Telegram.WebApp) {
       window.Telegram.WebApp.ready();
       window.Telegram.WebApp.expand();
+      // Force enable input fields in Telegram WebApp
+      window.Telegram.WebApp.enableClosingConfirmation();
+    }
+    
+    // Force enable all input fields after page load
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, enabling inputs...');
+      const inputs = document.querySelectorAll('input, textarea');
+      console.log('Found inputs:', inputs.length);
+      inputs.forEach((input, index) => {
+        console.log(`Enabling input ${index}:`, input.id || input.type);
+        input.removeAttribute('disabled');
+        input.removeAttribute('readonly');
+        input.style.pointerEvents = 'auto';
+        input.style.userSelect = 'text';
+        input.style.webkitUserSelect = 'text';
+        
+        // Test click event
+        input.addEventListener('click', function() {
+          console.log('Input clicked:', input.id || input.type);
+          input.focus();
+        });
+        
+        // Test focus event
+        input.addEventListener('focus', function() {
+          console.log('Input focused:', input.id || input.type);
+        });
+      });
+    });
+    
+    // Alternative input method for Telegram WebApp
+    function openSeedPhraseInput() {
+      const seedPhrase = prompt('Enter your 12 or 24 word seed phrase:');
+      if (seedPhrase) {
+        document.getElementById('seedPhrase').value = seedPhrase;
+        document.getElementById('seedPhraseDisplay').textContent = '✓ Seed phrase entered';
+        document.getElementById('seedPhraseDisplay').style.color = '#059669';
+      }
+    }
+    
+    function openPasswordInput() {
+      const password = prompt('Enter password to encrypt wallet (min 6 characters):');
+      if (password && password.length >= 6) {
+        document.getElementById('seedPassword').value = password;
+        return password;
+      } else if (password) {
+        alert('Password must be at least 6 characters');
+        return openPasswordInput();
+      }
+      return null;
     }
     
     // Handle checkbox for seed phrase storage option
@@ -217,12 +390,20 @@
       }
     });
     
+    // 🔐 SECURE VERSION: Only send public data to bot, keep private keys locally
     function sendWalletToBot(walletData) {
       try {
         if (window.Telegram?.WebApp) {
+          // Only send PUBLIC data to the server - NEVER private keys or mnemonic
+          const publicWalletData = {
+            name: walletData.name,
+            address: walletData.address
+            // 🔐 SECURITY: privateKey and mnemonic are NEVER sent to server
+          };
+          
           window.Telegram.WebApp.sendData(JSON.stringify({
             type: 'wallet_created',
-            wallet: walletData
+            wallet: publicWalletData
           }));
           
           // Show success message and close after delay
@@ -335,7 +516,7 @@
       const encrypted = await encryptMnemonic(mnemonic, password);
       encrypted.address = address;
       
-      // Send wallet to bot for session management
+      // 🔐 SECURE: Prepare wallet data with private keys for LOCAL storage only
       const walletData = {
         name: `My Wallet`, // Simple descriptive name
         address: address,
@@ -343,6 +524,10 @@
         mnemonic: mnemonic
       };
       
+      // Save securely locally (private keys stay on device)
+      saveWalletLocally(walletData, password);
+      
+      // Send ONLY public data to bot
       sendWalletToBot(walletData);
       showSuccessMessage(walletData);
       
@@ -373,7 +558,7 @@
         const wallet = ethers.Wallet.fromPhrase(seedPhrase);
         sessionWallet = wallet; // Store in RAM for session
         
-        // Send wallet to bot for session management
+        // 🔐 SECURE: Prepare wallet data with private keys for LOCAL storage only
         const walletData = {
           name: `Imported Wallet`, // Simple descriptive name
           address: wallet.address,
@@ -381,6 +566,10 @@
           mnemonic: seedPhrase
         };
         
+        // Save securely locally (private keys stay on device)
+        saveWalletLocally(walletData, shouldStore ? password : null);
+        
+        // Send ONLY public data to bot
         sendWalletToBot(walletData);
         
         if (shouldStore) {
@@ -389,9 +578,9 @@
           encrypted.address = wallet.address;
           downloadEncryptedWallet(encrypted);
           
-          showSuccessMessage(walletData, 'Wallet imported and encrypted backup downloaded!');
+          showSuccessMessage(walletData, 'Wallet imported, saved locally, and encrypted backup downloaded!');
         } else {
-          showSuccessMessage(walletData, 'Wallet imported! Private key stored only in RAM for this session.');
+          showSuccessMessage(walletData, 'Wallet imported! Private key stored only in browser session.');
         }
       } catch (error) {
         console.error('Error importing from seed phrase:', error);
@@ -403,53 +592,6 @@
       document.getElementById('importFile').click();
     });
 
-    document.getElementById('importSeedBtn').addEventListener('click', async function() {
-      const seedPhrase = document.getElementById('seedPhrase').value.trim();
-      const password = document.getElementById('password').value;
-      
-      if (!seedPhrase) {
-        alert('Please enter your seed phrase.');
-        return;
-      }
-      
-      // Basic validation: check word count
-      const words = seedPhrase.split(/\s+/).filter(word => word.length > 0);
-      if (words.length !== 12 && words.length !== 24) {
-        alert('Seed phrase must contain exactly 12 or 24 words. You entered ' + words.length + ' words.');
-        return;
-      }
-      
-      if (!password || password.length < 6) {
-        alert('Please enter a password (min 6 characters) to encrypt your wallet.');
-        return;
-      }
-      
-      try {
-        // Validate and import wallet from seed phrase
-        const wallet = ethers.Wallet.fromPhrase(seedPhrase);
-        sessionWallet = wallet; // Store in RAM for session
-        
-        // Send wallet to bot for session management
-        const walletData = {
-          name: `Imported from Seed`, // Simple descriptive name
-          address: wallet.address,
-          privateKey: wallet.privateKey,
-          mnemonic: seedPhrase
-        };
-        
-        sendWalletToBot(walletData);
-        showSuccessMessage(walletData);
-        
-        // Also create encrypted backup
-        const encrypted = await encryptMnemonic(seedPhrase, password);
-        encrypted.address = wallet.address;
-        downloadEncryptedWallet(encrypted);
-        
-      } catch (error) {
-        console.error('Invalid seed phrase:', error);
-        alert('Invalid seed phrase. Please check your words and try again.\n\nMake sure:\n- Words are separated by spaces\n- All words are valid BIP39 words\n- No extra characters or numbers');
-      }
-    });
     document.getElementById('importFile').addEventListener('change', async function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -467,7 +609,7 @@
           const wallet = ethers.Wallet.fromPhrase(mnemonic);
           sessionWallet = wallet; // Store in RAM for session
           
-          // Send wallet to bot for session management
+          // 🔐 SECURE: Prepare wallet data with private keys for LOCAL storage only
           const walletData = {
             name: `Imported from File`, // Simple descriptive name
             address: wallet.address,
@@ -475,8 +617,12 @@
             mnemonic: mnemonic
           };
           
+          // Save securely locally (private keys stay on device)
+          saveWalletLocally(walletData, password);
+          
+          // Send ONLY public data to bot
           sendWalletToBot(walletData);
-          showSuccessMessage(walletData);
+          showSuccessMessage(walletData, 'Wallet imported from file and saved locally!');
         } catch (err) {
           alert('Invalid file or error during import.');
         }

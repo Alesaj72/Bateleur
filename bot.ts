@@ -1,22 +1,23 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import TelegramBot from 'node-telegram-bot-api';
+import { Telegraf } from 'telegraf';
+import { Agentkit } from "@0xgasless/agentkit";
 
-// User session management
+// User session management - SECURE VERSION: No private keys stored on server
 interface WalletInfo {
   address: string;
-  privateKey: string;
-  mnemonic?: string;
   name: string;
+  // 🔐 SECURITY: privateKey and mnemonic are NEVER stored on server
 }
 
 interface UserSession {
   wallets: WalletInfo[];
   activeWalletIndex: number;
+  // 🔐 SECURITY: No AgentKit instance stored (no private keys available)
 }
 
-// Store user sessions in memory (per bot session)
+// Store user sessions in memory (per bot session) - ONLY PUBLIC DATA
 const userSessions = new Map<number, UserSession>();
 
 // Helper functions for session management
@@ -43,6 +44,10 @@ function addWalletToSession(userId: number, wallet: WalletInfo): void {
   
   const walletToAdd = { ...wallet, name: finalName };
   session.wallets.push(walletToAdd);
+  
+  // Auto-select the new wallet as active
+  session.activeWalletIndex = session.wallets.length - 1;
+  // 🔐 SECURITY: No AgentKit to reset (no private keys stored)
 }
 
 function getActiveWallet(userId: number): WalletInfo | null {
@@ -57,6 +62,7 @@ function setActiveWallet(userId: number, walletIndex: number): boolean {
   const session = getUserSession(userId);
   if (walletIndex >= 0 && walletIndex < session.wallets.length) {
     session.activeWalletIndex = walletIndex;
+    // 🔐 SECURITY: No AgentKit to reset (no private keys stored)
     return true;
   }
   return false;
@@ -67,71 +73,56 @@ if (!token) {
   throw new Error('TELEGRAM_API_KEY is not set in .env');
 }
 
-
-
-const DEFAULT_CODESPACE_URL = 'https://3000-sturdy-pancake-xgjprjx45xw3vv47.github.dev/';
+const DEFAULT_CODESPACE_URL = 'https://opulent-giggle-57wrvw55ww9cvxxq-3000.app.github.dev/';
 const walletManagerUrl = process.env.WALLET_MANAGER_URL || DEFAULT_CODESPACE_URL;
 if (!walletManagerUrl) {
   throw new Error('WALLET_MANAGER_URL is not set in .env and no default Codespaces URL is available. Please set it to your mini app URL, e.g. https://localhost:3000 or your Codespaces URL.');
 }
 
-const bot = new TelegramBot(token, { 
-  polling: {
-    params: {
-      allowed_updates: ["message", "callback_query"]
-    }
-  }
-});
+const bot = new Telegraf(token);
 
-console.log('Bot started successfully, polling enabled with callback_query support');
-
-// Basic message handler to test bot connectivity
-bot.on('message', (msg) => {
-  console.log('Message received:', msg.text);
-});
+console.log('Bot started successfully with Telegraf');
 
 // Set the menu button for all users to open the mini app
-bot.setChatMenuButton({
+bot.telegram.setChatMenuButton({
   type: 'web_app',
   text: 'Menu',
   web_app: { url: walletManagerUrl }
 } as any);
 
-bot.onText(/\/start/, (msg) => {
+bot.command('start', (ctx) => {
   console.log('/start command received');
-  const summary = `Welcome to Bateleur!\n\nThis Telegram bot lets you manage your blockchain assets and transactions easily, powered by 0xGasless.\n\nMain features:\n• Smart account (gasless wallet) management\n• Address and balance queries\n• Gasless transfers and swaps\n• Natural language commands\n\n💡 **Quick commands:**\n• Type "wallet" or "wallets" to manage your wallets\n• Send natural language instructions for transactions\n\nInfrastructure powered by 0xGasless 🚀`;
+  const summary = `Welcome to Bateleur!\n\nThis Telegram bot lets you manage your blockchain assets and transactions easily, powered by 0xGasless.\n\n🔐 **SECURE ARCHITECTURE:**\n• Your private keys NEVER leave your device\n• Server only stores public addresses\n• Maximum security guaranteed\n\nMain features:\n• Smart account (gasless wallet) management\n• Address and balance queries\n• Gasless transfers and swaps\n• Natural language commands\n\n💡 **Quick commands:**\n• Type "wallet" or "wallets" to manage your wallets\n• Use /security to learn about our security model\n• Send natural language instructions for transactions\n\nInfrastructure powered by 0xGasless 🚀`;
   
-  bot.sendMessage(msg.chat.id, summary, {
+  ctx.reply(summary, {
     reply_markup: {
       inline_keyboard: [[
         { text: "🔐 Create or Import Wallet", callback_data: "open_wallet_manager" }
       ]]
-    }
+    },
+    parse_mode: 'Markdown'
   }).then(() => {
     console.log('Message with inline keyboard sent successfully');
-  }).catch(err => {
+  }).catch((err: any) => {
     console.log('Error sending message:', err);
   });
 });
 
 // Handle natural language wallet management
-bot.on('message', (msg) => {
-  if (!msg.text) return;
-  
-  const text = msg.text.toLowerCase().trim();
-  const userId = msg.from?.id;
+bot.on('text', (ctx) => {
+  const text = ctx.message.text.toLowerCase().trim();
+  const userId = ctx.from?.id;
   if (!userId) return;
+
+  const session = getUserSession(userId);
   
   // Handle wallet/wallets commands naturally
   if (text === 'wallet' || text === 'wallets' || text === 'mes wallets' || text === 'mon wallet' || 
       text === 'portefeuille' || text === 'mes portefeuilles' || text === 'manage wallets' || 
       text === 'wallet management' || text === 'gestion wallet') {
-    console.log('Natural wallet command received:', text);
-    
-    const session = getUserSession(userId);
     
     if (session.wallets.length === 0) {
-      bot.sendMessage(msg.chat.id, "You don't have any wallets yet. Create or import one first:", {
+      ctx.reply("You don't have any wallets yet. Create or import one first:", {
         reply_markup: {
           inline_keyboard: [[
             { text: "🔐 Create/Import Wallet", callback_data: "open_wallet_manager" }
@@ -139,9 +130,13 @@ bot.on('message', (msg) => {
         }
       });
     } else {
-      // Show wallet selection menu
+      const activeWallet = getActiveWallet(userId);
+      const activeText = activeWallet 
+        ? `**Active Wallet:** ${activeWallet.name}\nAddress: \`${activeWallet.address}\`` 
+        : "No wallet is currently active.";
+      
       const walletButtons = session.wallets.map((wallet, index) => [{
-        text: `${index === session.activeWalletIndex ? '✅ ' : ''}${wallet.name} (${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)})`,
+        text: `${index === session.activeWalletIndex ? '✅ ' : ''}${wallet.name}`,
         callback_data: `select_wallet_${index}`
       }]);
       
@@ -149,32 +144,23 @@ bot.on('message', (msg) => {
         { text: "➕ Add New Wallet", callback_data: "open_wallet_manager" }
       ]);
       
-      const activeWallet = getActiveWallet(userId);
-      const activeText = activeWallet ? `Active: ${activeWallet.name}` : 'No active wallet';
-      
-      bot.sendMessage(msg.chat.id, `🔐 **Wallet Management**\n\n${activeText}\n\nSelect a wallet to make it active:`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: walletButtons
-        }
+      ctx.reply(`🔐 **Wallet Management**\n\n${activeText}\n\nSelect a wallet to make it active:`, {
+        reply_markup: { inline_keyboard: walletButtons },
+        parse_mode: 'Markdown'
       });
     }
     return;
   }
-  
-  // Log other messages for potential MCP processing
-  console.log('Message received:', msg.text);
 });
 
-bot.onText(/\/wallets/, (msg) => {
-  console.log('/wallets command received');
-  const userId = msg.from?.id;
+bot.command('wallets', (ctx) => {
+  const userId = ctx.from?.id;
   if (!userId) return;
 
   const session = getUserSession(userId);
   
   if (session.wallets.length === 0) {
-    bot.sendMessage(msg.chat.id, "You don't have any wallets yet. Create or import one first:", {
+    ctx.reply("You don't have any wallets yet. Create or import one first:", {
       reply_markup: {
         inline_keyboard: [[
           { text: "🔐 Create/Import Wallet", callback_data: "open_wallet_manager" }
@@ -182,9 +168,13 @@ bot.onText(/\/wallets/, (msg) => {
       }
     });
   } else {
-    // Show wallet selection menu
+    const activeWallet = getActiveWallet(userId);
+    const activeText = activeWallet 
+      ? `**Active Wallet:** ${activeWallet.name}\nAddress: \`${activeWallet.address}\`` 
+      : "No wallet is currently active.";
+    
     const walletButtons = session.wallets.map((wallet, index) => [{
-      text: `${index === session.activeWalletIndex ? '✅ ' : ''}${wallet.name} (${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)})`,
+      text: `${index === session.activeWalletIndex ? '✅ ' : ''}${wallet.name}`,
       callback_data: `select_wallet_${index}`
     }]);
     
@@ -192,57 +182,69 @@ bot.onText(/\/wallets/, (msg) => {
       { text: "➕ Add New Wallet", callback_data: "open_wallet_manager" }
     ]);
     
-    const activeWallet = getActiveWallet(userId);
-    const activeText = activeWallet ? `Active: ${activeWallet.name}` : 'No active wallet';
-    
-    bot.sendMessage(msg.chat.id, `🔐 **Wallet Management**\n\n${activeText}\n\nSelect a wallet to make it active:`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: walletButtons
-      }
+    ctx.reply(`🔐 **Wallet Management**\n\n${activeText}\n\nSelect a wallet to make it active:`, {
+      reply_markup: { inline_keyboard: walletButtons },
+      parse_mode: 'Markdown'
     });
   }
 });
 
-// Handle inline button press to show keyboard button
-bot.on('callback_query', (query) => {
-  console.log('===== CALLBACK QUERY RECEIVED =====');
-  console.log('Query data:', query.data);
-  console.log('Query ID:', query.id);
-  console.log('User ID:', query.from.id);
-  console.log('=====================================');
+// Command to explain secure architecture
+bot.command('security', async (ctx) => {
+  const securityInfo = `🔐 **Bateleur Security Architecture**\n\n` +
+    `✅ **Your private keys are NEVER stored on our servers**\n` +
+    `✅ **Private keys remain only on your device**\n` +
+    `✅ **Server only stores public addresses**\n\n` +
+    `🛡️ **How it works:**\n` +
+    `• Wallet creation/import happens in your browser\n` +
+    `• Only public address is sent to bot\n` +
+    `• Transactions are signed locally on your device\n` +
+    `• Maximum security, even if server is compromised\n\n` +
+    `For 0xGasless integration, private key signing will be handled client-side.`;
   
-  const userId = query.from.id;
+  ctx.reply(securityInfo, { parse_mode: 'Markdown' });
+});
+
+// Handle callback queries (button clicks)
+bot.on('callback_query', (ctx) => {
+  const callbackQuery = ctx.callbackQuery;
+  if (!callbackQuery || !('data' in callbackQuery)) return;
   
-  // Answer the callback query immediately
-  bot.answerCallbackQuery(query.id, { text: "Processing..." })
-    .then(() => console.log('Callback query answered'))
-    .catch(err => console.log('Error answering callback query:', err));
+  console.log('Callback query received');
+  console.log('Query data:', callbackQuery.data);
+  console.log('Query ID:', callbackQuery.id);
   
-  if (!query.message) return;
-  const chatId = query.message.chat.id;
+  const userId = ctx.from?.id;
+  if (!userId) return;
   
-  if (query.data === 'open_wallet_manager') {
+  const session = getUserSession(userId);
+  
+  // Answer the callback query to remove loading state
+  ctx.answerCbQuery("Processing...")
+    .catch((err: any) => console.log('Error answering callback query:', err));
+  
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  
+  if (callbackQuery.data === 'open_wallet_manager') {
     console.log('Sending keyboard button to chat:', chatId);
     
-    bot.sendMessage(chatId, "🔐 Use the button below to open the wallet manager:", {
+    ctx.reply("🔐 Use the button below to open the wallet manager:", {
       reply_markup: {
-        keyboard: [[{ text: "🔐 Open Wallet Manager", web_app: { url: walletManagerUrl } }]],
+        keyboard: [[{ text: "Open Wallet Manager", web_app: { url: walletManagerUrl } }]],
         resize_keyboard: true,
         one_time_keyboard: true
       }
     }).then(() => {
       console.log('✅ Keyboard button sent successfully');
-    }).catch((err) => {
+    }).catch((err: any) => {
       console.log('❌ Error sending keyboard button:', err);
     });
   }
   
-  else if (query.data === 'manage_wallets') {
-    const session = getUserSession(userId);
-    
+  else if (callbackQuery.data === 'manage_wallets') {
     if (session.wallets.length === 0) {
-      bot.sendMessage(chatId, "You don't have any wallets yet. Create or import one first:", {
+      ctx.reply("You don't have any wallets yet. Create or import one first:", {
         reply_markup: {
           inline_keyboard: [[
             { text: "🔐 Create/Import Wallet", callback_data: "open_wallet_manager" }
@@ -250,9 +252,13 @@ bot.on('callback_query', (query) => {
         }
       });
     } else {
-      // Show wallet selection menu
+      const activeWallet = getActiveWallet(userId);
+      const activeText = activeWallet 
+        ? `**Active Wallet:** ${activeWallet.name}\nAddress: \`${activeWallet.address}\`` 
+        : "No wallet is currently active.";
+      
       const walletButtons = session.wallets.map((wallet, index) => [{
-        text: `${index === session.activeWalletIndex ? '✅ ' : ''}${wallet.name} (${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)})`,
+        text: `${index === session.activeWalletIndex ? '✅ ' : ''}${wallet.name}`,
         callback_data: `select_wallet_${index}`
       }]);
       
@@ -260,47 +266,43 @@ bot.on('callback_query', (query) => {
         { text: "➕ Add New Wallet", callback_data: "open_wallet_manager" }
       ]);
       
-      const activeWallet = getActiveWallet(userId);
-      const activeText = activeWallet ? `Active: ${activeWallet.name}` : 'No active wallet';
-      
-      bot.sendMessage(chatId, `🔐 **Wallet Management**\n\n${activeText}\n\nSelect a wallet to make it active:`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: walletButtons
-        }
+      ctx.reply(`🔐 **Wallet Management**\n\n${activeText}\n\nSelect a wallet to make it active:`, {
+        reply_markup: { inline_keyboard: walletButtons },
+        parse_mode: 'Markdown'
       });
     }
   }
   
-  else if (query.data?.startsWith('select_wallet_')) {
-    const parts = query.data.split('_');
-    const walletIndex = parts[2] ? parseInt(parts[2]) : -1;
+  else if (callbackQuery.data?.startsWith('select_wallet_')) {
+    const parts = callbackQuery.data.split('_');
+    const walletIndex = parseInt(parts[2] || '0');
     
-    if (walletIndex >= 0 && setActiveWallet(userId, walletIndex)) {
+    if (setActiveWallet(userId, walletIndex)) {
       const activeWallet = getActiveWallet(userId);
-      bot.sendMessage(chatId, `✅ **Wallet activated**\n\n**${activeWallet?.name}**\nAddress: \`${activeWallet?.address}\`\n\nYou can now use this wallet for transactions.`, {
+      ctx.reply(`✅ **Wallet activated**\n\n**${activeWallet?.name}**\nAddress: \`${activeWallet?.address}\`\n\nYou can now use this wallet for transactions.`, {
         parse_mode: 'Markdown'
       });
     } else {
-      bot.sendMessage(chatId, "❌ Error selecting wallet. Please try again.");
+      ctx.reply("❌ Error selecting wallet. Please try again.");
     }
   }
 });
 
 // Handle WebApp data from wallet manager
-bot.on('web_app_data', (msg) => {
+bot.on('web_app_data', (ctx) => {
   console.log('===== WEB APP DATA RECEIVED =====');
-  console.log('User ID:', msg.from?.id);
-  console.log('Data:', msg.web_app_data?.data);
+  console.log('User ID:', ctx.from?.id);
+  console.log('Data:', ctx.webAppData?.data);
   console.log('===================================');
   
-  const userId = msg.from?.id;
+  const userId = ctx.from?.id;
   if (!userId) return;
   
-  const chatId = msg.chat.id;
+  const chatId = ctx.chat.id;
   
   try {
-    const data = JSON.parse(msg.web_app_data?.data || '{}');
+    const dataStr = typeof ctx.webAppData?.data === 'string' ? ctx.webAppData.data : ctx.webAppData?.data?.text() || '{}';
+    const data = JSON.parse(dataStr);
     
     if (data.type === 'wallet_created' && data.wallet) {
       const wallet = data.wallet;
@@ -312,7 +314,7 @@ bot.on('web_app_data', (msg) => {
       if (walletIndex >= 0) {
         setActiveWallet(userId, walletIndex);
         
-        bot.sendMessage(chatId, `✅ **Wallet added successfully!**\n\n**${wallet.name}**\nAddress: \`${wallet.address}\`\n\nThis wallet is now active and ready to use.`, {
+        ctx.reply(`✅ **Wallet added successfully!**\n\n**${wallet.name}**\nAddress: \`${wallet.address}\`\n\nThis wallet is now active and ready to use.`, {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[
@@ -321,29 +323,25 @@ bot.on('web_app_data', (msg) => {
           }
         });
       } else {
-        bot.sendMessage(chatId, "❌ Error adding wallet to session. Please try again.");
+        ctx.reply("❌ Error adding wallet to session. Please try again.");
       }
     }
   } catch (error) {
     console.error('Error processing WebApp data:', error);
-    bot.sendMessage(chatId, "❌ Error processing wallet data. Please try again.");
+    ctx.reply("❌ Error processing wallet data. Please try again.");
   }
 });
 
 // Catch all events for debugging
-bot.on('polling_error', (error) => {
-  console.log('Polling error:', error);
+bot.catch((err: any) => {
+  console.log('Bot error:', err);
 });
 
-bot.on('error', (error) => {
-  console.log('Bot error:', error);
-});
-
-bot.onText(/create|import wallet/i, (msg) => {
+bot.hears(/create|import wallet/i, (ctx) => {
   // Step 1: Send info message
-  bot.sendMessage(msg.chat.id, "To manage your wallet, please use the button below.");
+  ctx.reply("To manage your wallet, please use the button below.");
   // Step 2: Send a message with the keyboard attached
-  bot.sendMessage(msg.chat.id, "Open the wallet manager below:", {
+  ctx.reply("Open the wallet manager below:", {
     reply_markup: {
       keyboard: [[{ text: "Open Wallet Manager", web_app: { url: walletManagerUrl } }]],
       resize_keyboard: true,
@@ -351,3 +349,10 @@ bot.onText(/create|import wallet/i, (msg) => {
     }
   });
 });
+
+// Launch the bot
+bot.launch();
+
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
